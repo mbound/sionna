@@ -1,6 +1,7 @@
 name: TR 38.811 port tests
 
 on:
+  workflow_dispatch:
   push:
     branches: ["feature/ntn-tr38811-pytorch"]
     paths:
@@ -15,7 +16,7 @@ on:
       - "test/unit/phy/channel/tr38811/**"
 
 jobs:
-  unit:
+  fast:
     runs-on: ubuntu-latest
     env:
       PYTHONPATH: ${{ github.workspace }}/src
@@ -36,7 +37,25 @@ jobs:
           print("version:", sionna.__version__)
           print("phy:", sionna.phy.__file__)
           PY
-      - name: Run NTN and TDL regression tests
+      - name: Run NTN unit tests
+        run: pytest -q --device=cpu test/unit/phy/channel/tr38811
+      - name: Run fast stock TDL compatibility tests
         run: |
-          pytest -q --device=cpu test/unit/phy/channel/tr38811
-          pytest -q --device=cpu test/unit/channel/test_3gpp_channel_tdl.py
+          pytest -q --device=cpu test/unit/channel/test_3gpp_channel_tdl.py \
+            -k "pdp or exact_profile_delays or fixed_delay_spread_override_and_immutability or fixed_los_first_tap_combination or output_shapes or output_dtype or los_model_properties or nlos_model_properties or delay_spread_setter or mean_powers_normalized"
+
+  full-tdl-regression:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: ${{ github.workspace }}/src
+      SIONNA_DEVICE: cpu
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -e ".[test]"
+      - name: Run complete stock Sionna TDL suite
+        run: pytest -q --device=cpu test/unit/channel/test_3gpp_channel_tdl.py
