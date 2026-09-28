@@ -39,3 +39,7 @@ __all__ += [
     "ppm_to_hz",
     "speed_for_max_doppler_hz",
 ]
+
+from .lls import SuburbanLosTdl
+
+__all__ += ["SuburbanLosTdl"]
