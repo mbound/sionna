@@ -426,12 +426,15 @@ class TDL(ChannelModel):
         spatial_corr_mat: Optional[torch.Tensor] = None,
         rx_corr_mat: Optional[torch.Tensor] = None,
         tx_corr_mat: Optional[torch.Tensor] = None,
+        k_factor_db: Optional[float] = None,
         precision: Optional[str] = None,
         device: Optional[str] = None,
         spec_version: str = "19.2",
     ) -> None:
         super().__init__(precision=precision, device=device)
         self._spec_version = models._validate_spec_version(spec_version)
+        self._model = model
+        self._k_factor_db_override = k_factor_db
 
         # carrier_frequency only defaults to None so that delay_spread, which
         # precedes it, can be omitted for the fixed-delay profiles
@@ -460,6 +463,13 @@ class TDL(ChannelModel):
             parameters_fname,
             fixed_profile=fixed_delay_spread is not None,
         )
+
+        if k_factor_db is not None:
+            if model not in ("D", "E") or fixed_delay_spread is not None:
+                raise ValueError(
+                    "k_factor_db is only supported for scalable LoS TDL-D/E"
+                )
+            self._apply_k_factor_db(float(k_factor_db))
 
         self._num_rx_ant = num_rx_ant
         self._num_tx_ant = num_tx_ant
@@ -537,12 +547,32 @@ class TDL(ChannelModel):
 
     @property
     def k_factor(self) -> torch.Tensor:
-        r"""K-factor in linear scale. Only available with LoS models."""
+        r"""First-tap Rice factor in linear scale for LoS TDL models.
+
+        This is the ratio between the deterministic LoS component and the
+        diffuse component co-located at zero delay. It is distinct from the
+        model K-factor defined by TR 38.901 Section 7.7.6, which uses the sum
+        of all Rayleigh tap powers. Use ``model_k_factor`` for the latter.
+        """
         if not self._los:
             raise RuntimeError(
                 "This property is only available for LoS models"
             )
         return torch.real(self._los_power / self._mean_powers[0])
+
+    @property
+    def model_k_factor(self) -> torch.Tensor:
+        r"""TR 38.901 Section 7.7.6 model K-factor in linear scale."""
+        if not self._los:
+            raise RuntimeError(
+                "This property is only available for LoS models"
+            )
+        return torch.real(self._los_power / torch.sum(self._mean_powers))
+
+    @property
+    def model_k_factor_db(self) -> torch.Tensor:
+        r"""TR 38.901 Section 7.7.6 model K-factor in dB."""
+        return 10.0 * torch.log10(self.model_k_factor)
 
     @property
     def delays(self) -> torch.Tensor:
@@ -719,6 +749,48 @@ class TDL(ChannelModel):
         :output doppler: Doppler shift [Hz]
         """
         return 2. * PI * speed / SPEED_OF_LIGHT * self._carrier_frequency
+
+    def _apply_k_factor_db(self, desired_k_db: float) -> None:
+        r"""Apply the TR 38.901 Section 7.7.6 LoS K-factor procedure.
+
+        All Rayleigh tap powers are shifted by K_model - K_desired dB while
+        the deterministic LoS power is left unchanged. The PDP is then
+        power-normalized and the normalized tap delays are re-scaled so the
+        RMS delay spread is one before the user-supplied delay_spread is
+        applied. This method is valid for scalable TDL-D/E only.
+        """
+        if not self._los:
+            raise RuntimeError("K-factor adjustment requires a LoS TDL model")
+
+        desired = torch.tensor(
+            float(desired_k_db), dtype=self.dtype, device=self.device
+        )
+        current = self.model_k_factor_db
+
+        # Eq. 7.7.6-1 in linear power form.
+        diffuse_scale = torch.pow(
+            torch.tensor(10.0, dtype=self.dtype, device=self.device),
+            (current - desired) / 10.0,
+        )
+        self._mean_powers = self._mean_powers * diffuse_scale.to(self.cdtype)
+
+        # Re-normalize total power.
+        norm_factor = torch.sum(self._mean_powers) + self._los_power
+        self._los_power = self._los_power / norm_factor
+        self._mean_powers = self._mean_powers / norm_factor
+
+        # Section 7.7.6: re-normalize the delay profile to RMS DS = 1.
+        diffuse_power = torch.real(self._mean_powers)
+        los_power = torch.real(self._los_power)
+        mean_delay = torch.sum(diffuse_power * self._delays)
+        variance = (
+            los_power * mean_delay * mean_delay
+            + torch.sum(diffuse_power * (self._delays - mean_delay) ** 2)
+        )
+        rms_delay = torch.sqrt(variance)
+        if bool(rms_delay <= 0.0):
+            raise RuntimeError("invalid RMS delay after K-factor adjustment")
+        self._delays = self._delays / rms_delay
 
     def _load_parameters(self, fname: str, fixed_profile: bool) -> None:
         r"""Load parameters of a TDL model.
