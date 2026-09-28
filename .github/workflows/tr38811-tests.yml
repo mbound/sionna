@@ -5,11 +5,13 @@ on:
     branches: ["feature/ntn-tr38811-pytorch"]
     paths:
       - "src/sionna/phy/channel/tr38811/**"
+      - "src/sionna/phy/channel/tr38901/tdl.py"
       - "test/unit/phy/channel/tr38811/**"
       - ".github/workflows/tr38811-tests.yml"
   pull_request:
     paths:
       - "src/sionna/phy/channel/tr38811/**"
+      - "src/sionna/phy/channel/tr38901/tdl.py"
       - "test/unit/phy/channel/tr38811/**"
 
 jobs:
@@ -34,4 +36,7 @@ jobs:
           print("version:", sionna.__version__)
           print("phy:", sionna.phy.__file__)
           PY
-      - run: pytest -q --device=cpu test/unit/phy/channel/tr38811
+      - name: Run NTN and TDL regression tests
+        run: |
+          pytest -q --device=cpu test/unit/phy/channel/tr38811
+          pytest -q --device=cpu test/unit/channel/test_3gpp_channel_tdl.py
