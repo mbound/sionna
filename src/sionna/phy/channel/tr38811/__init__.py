@@ -27,3 +27,15 @@ __all__ = [
     "nearest_elevation_bin",
     "suburban_los_sband_profile",
 ]
+
+from .calibration import (
+    LeoSBandLlsCalibration,
+    ppm_to_hz,
+    speed_for_max_doppler_hz,
+)
+
+__all__ += [
+    "LeoSBandLlsCalibration",
+    "ppm_to_hz",
+    "speed_for_max_doppler_hz",
+]
