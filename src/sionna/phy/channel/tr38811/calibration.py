@@ -55,13 +55,11 @@ class LeoSBandLlsCalibration:
         return self.carrier_frequency_hz * self.residual_frequency_error_ppm * 1e-6
 
     def tdl_baseline_kwargs(self, model: str = "D") -> dict:
-        """Return the direct Sionna TDL constructor subset for the LLS baseline.
+        """Return Sionna TDL arguments for the LEO S-band LLS baseline.
 
-        TR 38.821 references a baseline TDL/CDL model with the NTN mean delay
-        spread and K-factor. Current Sionna TDL-D has a fixed profile K-factor;
-        therefore this helper sets the delay spread and records the target
-        K-factor separately. A dedicated K-factor override will only be added
-        after locking its exact interpretation to the source RAN1 LLS TDocs.
+        TR 38.821 selects the NTN mean delay spread and K-factor. The
+        k_factor_db argument uses the TR 38.901 Section 7.7.6 procedure
+        implemented on the feature branch for scalable TDL-D/E.
         """
         return {
             "model": model,
@@ -69,6 +67,7 @@ class LeoSBandLlsCalibration:
             "carrier_frequency": self.carrier_frequency_hz,
             "min_speed": self.ue_speed_m_s,
             "max_speed": self.ue_speed_m_s,
+            "k_factor_db": self.mean_k_factor_db,
             "spec_version": "16.1",
         }
 
