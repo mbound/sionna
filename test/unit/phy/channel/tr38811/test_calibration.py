@@ -19,12 +19,13 @@ def test_leo_sband_30deg_lls_manifest():
     assert m["residual_frequency_error_hz"] == 200.0
 
 
-def test_tdl_baseline_uses_ntn_delay_spread_but_keeps_k_target_explicit():
+def test_tdl_baseline_uses_ntn_delay_spread_and_k_factor():
     c = LeoSBandLlsCalibration()
     kw = c.tdl_baseline_kwargs()
     assert kw["model"] == "D"
     assert math.isclose(kw["delay_spread"], 10.0 ** -8.72)
     assert kw["carrier_frequency"] == 2.0e9
+    assert kw["k_factor_db"] == 20.8
     assert kw["spec_version"] == "16.1"
     assert c.mean_k_factor_db == 20.8
 
