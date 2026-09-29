@@ -10,6 +10,9 @@ from .suburban import (
     SuburbanLosSBandProfile,
     nearest_elevation_bin,
     suburban_los_sband_profile,
+    SuburbanLosLspSample,
+    sample_suburban_los_sband_lsp,
+    suburban_los_basic_pathloss_db,
 )
 from .lls import Tr38821LeoSBandLlsConfig, LeoSBandLlsCalibration
 
@@ -21,6 +24,9 @@ __all__ = [
     "SuburbanLosSBandProfile",
     "nearest_elevation_bin",
     "suburban_los_sband_profile",
+    "suburban_los_basic_pathloss_db",
+    "sample_suburban_los_sband_lsp",
+    "SuburbanLosLspSample",
     "Tr38821LeoSBandLlsConfig",
     "LeoSBandLlsCalibration",
 ]
