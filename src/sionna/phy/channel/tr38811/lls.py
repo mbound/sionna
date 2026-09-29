@@ -70,10 +70,9 @@ class Tr38821LeoSBandLlsConfig:
         several TR 38.821 evaluations. TDL-A is retained as the documented
         NLOS/control alternative used in some NTN evaluations.
 
-        Sionna's scalable TDL-D has its own fixed profile K ratio. We therefore
-        expose the TR 38.811 mean K factor separately instead of silently
-        pretending the two are identical. A later adapter will support explicit
-        first-tap K-factor replacement for strict calibration.
+        For TDL-D, Sionna's scalable LoS model is explicitly re-weighted to
+        the TR 38.811 Suburban mean K factor using its TR 38.901 Section 7.7.6
+        K-factor override and RMS-delay re-normalization.
         """
         return TDL(
             model=self.tdl_model,
@@ -81,6 +80,7 @@ class Tr38821LeoSBandLlsConfig:
             carrier_frequency=self.carrier_frequency_hz,
             min_speed=self.ue_speed_for_tdl_m_s,
             max_speed=self.ue_speed_for_tdl_m_s,
+            k_factor_db=(self.mean_k_factor_db if self.tdl_model == "D" else None),
             precision=precision,
             device=device,
             spec_version=self.spec_version,
