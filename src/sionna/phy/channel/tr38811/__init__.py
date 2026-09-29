@@ -1,10 +1,4 @@
-"""3GPP TR 38.811 non-terrestrial channel-model building blocks.
-
-This package is an incremental PyTorch/Sionna-2.x port. The first checkpoint
-contains deterministic LEO geometry helpers and the Suburban LOS S-band
-large-scale-parameter table needed for the TR 38.821 LEO-S-band calibration
-work. Frequency-selective channel generation will be added incrementally.
-"""
+"""3GPP TR 38.811 non-terrestrial channel-model building blocks."""
 
 from .geometry import (
     EARTH_RADIUS_M,
@@ -17,6 +11,7 @@ from .suburban import (
     nearest_elevation_bin,
     suburban_los_sband_profile,
 )
+from .lls import Tr38821LeoSBandLlsConfig
 
 __all__ = [
     "EARTH_RADIUS_M",
@@ -26,20 +21,5 @@ __all__ = [
     "SuburbanLosSBandProfile",
     "nearest_elevation_bin",
     "suburban_los_sband_profile",
+    "Tr38821LeoSBandLlsConfig",
 ]
-
-from .calibration import (
-    LeoSBandLlsCalibration,
-    ppm_to_hz,
-    speed_for_max_doppler_hz,
-)
-
-__all__ += [
-    "LeoSBandLlsCalibration",
-    "ppm_to_hz",
-    "speed_for_max_doppler_hz",
-]
-
-from .lls import SuburbanLosTdl
-
-__all__ += ["SuburbanLosTdl"]
