@@ -37,4 +37,14 @@ __all__ = [
     "SuburbanLosLspSample",
     "Tr38821LeoSBandLlsConfig",
     "LeoSBandLlsCalibration",
+
+    "LosClusterSample",
+    "los_delay_scaling_from_k_db",
+    "sample_suburban_los_clusters",
 ]
+
+from .clusters import (
+    LosClusterSample,
+    los_delay_scaling_from_k_db,
+    sample_suburban_los_clusters,
+)
