@@ -20,3 +20,4 @@ def test_tr38821_builds_scalable_tdl_d():
     tdl = c.build_tdl(device="cpu")
     assert tdl.los
     assert math.isclose(float(tdl.delay_spread), c.mean_delay_spread_s, rel_tol=1e-6)
+    assert math.isclose(float(tdl.model_k_factor_db), c.mean_k_factor_db, rel_tol=1e-5)
