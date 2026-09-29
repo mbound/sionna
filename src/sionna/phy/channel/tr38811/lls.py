@@ -103,3 +103,68 @@ class Tr38821LeoSBandLlsConfig:
             "los_probability": p.los_probability,
             "spec_version": self.spec_version,
         }
+
+
+class LeoSBandLlsCalibration:
+    """Backward-compatible calibration helper used by ntn-doppler-delay.
+
+    It exposes explicit constructor kwargs plus a machine-readable manifest.
+    """
+
+    def __init__(self):
+        self._config = Tr38821LeoSBandLlsConfig()
+
+    @property
+    def carrier_frequency_hz(self) -> float:
+        return self._config.carrier_frequency_hz
+
+    @property
+    def elevation_deg(self) -> float:
+        return self._config.elevation_deg
+
+    @property
+    def subcarrier_spacing_hz(self) -> float:
+        return self._config.subcarrier_spacing_hz
+
+    @property
+    def ue_speed_m_s(self) -> float:
+        return self._config.ue_speed_m_s
+
+    @property
+    def mean_delay_spread_s(self) -> float:
+        return self._config.mean_delay_spread_s
+
+    @property
+    def mean_k_factor_db(self) -> float:
+        return self._config.mean_k_factor_db
+
+    @property
+    def residual_frequency_error_hz(self) -> float:
+        return self._config.residual_frequency_error_hz
+
+    def tdl_baseline_kwargs(self, model: str = "D") -> dict:
+        model = str(model).upper()
+        if model not in ("D", "E"):
+            raise ValueError("TR 38.821 LOS calibration adapter supports TDL-D/E")
+        return {
+            "model": model,
+            "delay_spread": self.mean_delay_spread_s,
+            "carrier_frequency": self.carrier_frequency_hz,
+            "min_speed": self.ue_speed_m_s,
+            "max_speed": self.ue_speed_m_s,
+            "k_factor_db": self.mean_k_factor_db,
+            "spec_version": "16.1",
+        }
+
+    def manifest(self) -> dict:
+        out = self._config.as_dict()
+        out.update(
+            {
+                "source": "3GPP TR 38.821 section 6.1.2",
+                "channel_parameter_source": (
+                    "3GPP TR 38.811 Suburban LOS, 30 degree elevation"
+                ),
+                "calibration_profile": "LEO S-band",
+            }
+        )
+        return out
