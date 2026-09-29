@@ -148,3 +148,96 @@ def suburban_los_basic_pathloss_db(
     )
     sf = torch.as_tensor(shadow_fading_db, dtype=pl.dtype, device=pl.device)
     return pl + sf
+
+
+# Cross-LSP correlation matrix for TR 38.811 Suburban LOS S-band UL.
+# Order: DS, ASD, ASA, SF, K, ZSA, ZSD.
+_SUBURBAN_LOS_S_UL_CORR = (
+    ( 1.0,  0.4,  0.8, -0.4, -0.4,  0.0, -0.2),
+    ( 0.4,  1.0,  0.0, -0.5,  0.0,  0.0,  0.5),
+    ( 0.8,  0.0,  1.0, -0.5, -0.2,  0.4, -0.3),
+    (-0.4, -0.5, -0.5,  1.0,  0.0, -0.8,  0.0),
+    (-0.4,  0.0, -0.2,  0.0,  1.0,  0.0,  0.0),
+    ( 0.0,  0.0,  0.4, -0.8,  0.0,  1.0,  0.0),
+    (-0.2,  0.5, -0.3,  0.0,  0.0,  0.0,  1.0),
+)
+
+# The current correlation checkpoint is deliberately locked to the exact
+# 30-degree UL calibration point used by the LEO S-band PUSCH work.
+_SUBURBAN_LOS_S_UL_30_MEAN = (-8.72, -3.77, -0.56, 0.0, 20.80, -1.67, -1.28)
+_SUBURBAN_LOS_S_UL_30_STD = (0.79, 1.72, 1.75, 1.14, 16.34, 0.57, 0.49)
+
+
+@dataclass(frozen=True)
+class SuburbanLosCorrelatedLspSample:
+    """Correlated UL LSP realization in the native Gaussian/log domains."""
+
+    gaussian_native: "torch.Tensor"
+    delay_spread_s: "torch.Tensor"
+    asd_deg: "torch.Tensor"
+    asa_deg: "torch.Tensor"
+    shadow_fading_db: "torch.Tensor"
+    k_factor_db: "torch.Tensor"
+    zsa_deg: "torch.Tensor"
+    zsd_deg: "torch.Tensor"
+
+
+def suburban_los_sband_ul_correlation_matrix(*, dtype=None, device=None):
+    """Return the 7x7 cross-LSP correlation matrix."""
+    import torch
+    dtype = dtype or torch.float64
+    return torch.tensor(_SUBURBAN_LOS_S_UL_CORR, dtype=dtype, device=device)
+
+
+def sample_suburban_los_sband_ul_correlated_lsp(
+    sample_shape,
+    elevation_deg: float = 30.0,
+    *,
+    generator=None,
+    dtype=None,
+    device=None,
+) -> SuburbanLosCorrelatedLspSample:
+    """Sample correlated Suburban-LOS S-band UL LSPs at 30 degrees.
+
+    The Gaussian vector order is DS, ASD, ASA, SF, K, ZSA, ZSD. DS/ASD/ASA/
+    ZSA/ZSD are subsequently exponentiated base-10; SF and K remain in dB.
+
+    This implements cross-LSP correlation at one location. Spatial correlation
+    across multiple UT positions is a later checkpoint and is not implied here.
+    """
+    import torch
+
+    if abs(float(elevation_deg) - 30.0) > 1e-12:
+        raise NotImplementedError(
+            "correlated UL checkpoint currently supports 30 degree elevation"
+        )
+    dtype = dtype or torch.float64
+    shape = tuple(sample_shape) if not isinstance(sample_shape, int) else (sample_shape,)
+    n = 1
+    for dim in shape:
+        n *= int(dim)
+
+    corr = suburban_los_sband_ul_correlation_matrix(dtype=dtype, device=device)
+    chol = torch.linalg.cholesky(corr)
+    z = torch.randn((n, 7), dtype=dtype, device=device, generator=generator)
+    zc = z @ chol.T
+
+    mean = torch.tensor(
+        _SUBURBAN_LOS_S_UL_30_MEAN, dtype=dtype, device=device
+    )
+    std = torch.tensor(
+        _SUBURBAN_LOS_S_UL_30_STD, dtype=dtype, device=device
+    )
+    native = mean + zc * std
+    native = native.reshape(*shape, 7)
+
+    return SuburbanLosCorrelatedLspSample(
+        gaussian_native=native,
+        delay_spread_s=torch.pow(10.0, native[..., 0]),
+        asd_deg=torch.pow(10.0, native[..., 1]),
+        asa_deg=torch.pow(10.0, native[..., 2]),
+        shadow_fading_db=native[..., 3],
+        k_factor_db=native[..., 4],
+        zsa_deg=torch.pow(10.0, native[..., 5]),
+        zsd_deg=torch.pow(10.0, native[..., 6]),
+    )
