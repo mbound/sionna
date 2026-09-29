@@ -16,6 +16,7 @@ from .suburban import (
     SuburbanLosCorrelatedLspSample,
     suburban_los_sband_ul_correlation_matrix,
     sample_suburban_los_sband_ul_correlated_lsp,
+    suburban_los_sband_ul_spatial_correlation_matrices,
 )
 from .lls import Tr38821LeoSBandLlsConfig, LeoSBandLlsCalibration
 
@@ -27,6 +28,7 @@ __all__ = [
     "SuburbanLosSBandProfile",
     "nearest_elevation_bin",
     "suburban_los_sband_profile",
+    "suburban_los_sband_ul_spatial_correlation_matrices",
     "sample_suburban_los_sband_ul_correlated_lsp",
     "suburban_los_sband_ul_correlation_matrix",
     "SuburbanLosCorrelatedLspSample",
