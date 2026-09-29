@@ -286,3 +286,98 @@ def suburban_los_sband_ul_spatial_correlation_matrices(
             )
         )
     return torch.stack(out, dim=0)
+
+
+def sample_suburban_los_sband_ul_joint_lsp(
+    ut_xy_m,
+    num_realizations: int,
+    elevation_deg: float = 30.0,
+    *,
+    generator=None,
+    dtype=None,
+    device=None,
+) -> SuburbanLosCorrelatedLspSample:
+    """Sample jointly cross- and spatially-correlated UL LSPs.
+
+    This follows the OpenNTN/TR 38.901 filtering order:
+    1. independent standard-normal samples per UT/LSP;
+    2. cross-LSP Cholesky filtering independently at each UT;
+    3. per-LSP spatial filtering across UTs with C_ij=exp(-d_ij/D_X);
+    4. apply the TR 38.811 means and standard deviations.
+
+    The output shape before the final LSP dimension is
+    [num_realizations, num_ut].
+    """
+    import torch
+    from sionna.phy.channel.tr38901.spatial_consistency import (
+        spatial_consistency_matrix_sqrt,
+    )
+
+    if int(num_realizations) <= 0:
+        raise ValueError("num_realizations must be positive")
+    if abs(float(elevation_deg) - 30.0) > 1e-12:
+        raise NotImplementedError(
+            "joint UL checkpoint currently supports 30 degree elevation"
+        )
+
+    dtype = dtype or torch.float64
+    xy = torch.as_tensor(ut_xy_m, dtype=dtype, device=device)
+    if xy.ndim != 2 or xy.shape[-1] != 2:
+        raise ValueError("ut_xy_m must have shape [num_ut, 2]")
+    n_ut = int(xy.shape[0])
+
+    cross = suburban_los_sband_ul_correlation_matrix(
+        dtype=dtype, device=xy.device
+    )
+    cross_sqrt = torch.linalg.cholesky(cross)
+    spatial = suburban_los_sband_ul_spatial_correlation_matrices(
+        xy, elevation_deg=elevation_deg, dtype=dtype, device=xy.device
+    )
+    spatial_sqrt = torch.stack(
+        [
+            spatial_consistency_matrix_sqrt(m, device=xy.device)
+            for m in spatial
+        ],
+        dim=0,
+    )
+
+    z = torch.randn(
+        (int(num_realizations), n_ut, 7),
+        dtype=dtype,
+        device=xy.device,
+        generator=generator,
+    )
+    # Cross-LSP filtering at every UT.
+    z = torch.matmul(z, cross_sqrt.T)
+
+    # Spatial filtering independently for each LSP.
+    z_by_lsp = z.permute(0, 2, 1)
+    filtered = []
+    for p in range(7):
+        filtered.append(z_by_lsp[:, p, :] @ spatial_sqrt[p].T)
+    z = torch.stack(filtered, dim=1).permute(0, 2, 1)
+
+    mean = torch.tensor(
+        _SUBURBAN_LOS_S_UL_30_MEAN, dtype=dtype, device=xy.device
+    )
+    std = torch.tensor(
+        _SUBURBAN_LOS_S_UL_30_STD, dtype=dtype, device=xy.device
+    )
+    native = mean + z * std
+
+    # TR 38.901/OpenNTN caps angular spreads after conversion to linear domain.
+    asd = torch.clamp(torch.pow(10.0, native[..., 1]), max=104.0)
+    asa = torch.clamp(torch.pow(10.0, native[..., 2]), max=104.0)
+    zsa = torch.clamp(torch.pow(10.0, native[..., 5]), max=52.0)
+    zsd = torch.clamp(torch.pow(10.0, native[..., 6]), max=52.0)
+
+    return SuburbanLosCorrelatedLspSample(
+        gaussian_native=native,
+        delay_spread_s=torch.pow(10.0, native[..., 0]),
+        asd_deg=asd,
+        asa_deg=asa,
+        shadow_fading_db=native[..., 3],
+        k_factor_db=native[..., 4],
+        zsa_deg=zsa,
+        zsd_deg=zsd,
+    )
