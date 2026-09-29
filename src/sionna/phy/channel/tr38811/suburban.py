@@ -73,3 +73,78 @@ def suburban_los_sband_profile(elevation_deg: float) -> SuburbanLosSBandProfile:
         r_tau=r_tau,
         num_clusters=n_clusters,
     )
+
+
+@dataclass(frozen=True)
+class SuburbanLosLspSample:
+    """Marginal Suburban-LOS large-scale-parameter realization."""
+
+    delay_spread_s: "torch.Tensor"
+    asa_deg: "torch.Tensor"
+    zsa_deg: "torch.Tensor"
+    shadow_fading_db: "torch.Tensor"
+    k_factor_db: "torch.Tensor"
+
+
+def sample_suburban_los_sband_lsp(
+    sample_shape,
+    elevation_deg: float,
+    *,
+    generator=None,
+    dtype=None,
+    device=None,
+) -> SuburbanLosLspSample:
+    """Sample the *marginal* TR 38.811 Suburban-LOS S-band LSPs.
+
+    This checkpoint validates the one-dimensional distributions before the full
+    TR 38.811 cross-correlation machinery is ported. DS/ASA/ZSA are log-normal
+    using the tabulated base-10 log means/stds; SF and K are normal in dB.
+    """
+    import torch
+
+    p = suburban_los_sband_profile(elevation_deg)
+    dtype = dtype or torch.float64
+    shape = tuple(sample_shape) if not isinstance(sample_shape, int) else (sample_shape,)
+
+    def z():
+        return torch.randn(shape, dtype=dtype, device=device, generator=generator)
+
+    ten = lambda v: torch.tensor(float(v), dtype=dtype, device=device)
+    ds = torch.pow(ten(10.0), ten(p.mu_log10_ds_s) + ten(p.sigma_log10_ds) * z())
+    asa = torch.pow(ten(10.0), ten(p.mu_log10_asa_deg) + ten(p.sigma_log10_asa) * z())
+    zsa = torch.pow(ten(10.0), ten(p.mu_log10_zsa_deg) + ten(p.sigma_log10_zsa) * z())
+    sf = ten(p.shadow_fading_sigma_db) * z()
+    k = ten(p.k_factor_mean_db) + ten(p.k_factor_sigma_db) * z()
+
+    return SuburbanLosLspSample(
+        delay_spread_s=ds,
+        asa_deg=asa,
+        zsa_deg=zsa,
+        shadow_fading_db=sf,
+        k_factor_db=k,
+    )
+
+
+def suburban_los_basic_pathloss_db(
+    distance_m,
+    carrier_frequency_hz: float,
+    shadow_fading_db=0.0,
+    *,
+    dtype=None,
+    device=None,
+):
+    """TR 38.811 LOS basic path loss: free-space loss plus shadow fading.
+
+    Additional atmospheric/scintillation losses are deliberately separate.
+    """
+    import torch
+    from .geometry import free_space_pathloss_db
+
+    pl = free_space_pathloss_db(
+        distance_m,
+        carrier_frequency_hz,
+        dtype=dtype,
+        device=device,
+    )
+    sf = torch.as_tensor(shadow_fading_db, dtype=pl.dtype, device=pl.device)
+    return pl + sf
