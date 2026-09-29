@@ -11,7 +11,7 @@ from .suburban import (
     nearest_elevation_bin,
     suburban_los_sband_profile,
 )
-from .lls import Tr38821LeoSBandLlsConfig
+from .lls import Tr38821LeoSBandLlsConfig, LeoSBandLlsCalibration
 
 __all__ = [
     "EARTH_RADIUS_M",
@@ -22,4 +22,5 @@ __all__ = [
     "nearest_elevation_bin",
     "suburban_los_sband_profile",
     "Tr38821LeoSBandLlsConfig",
+    "LeoSBandLlsCalibration",
 ]
