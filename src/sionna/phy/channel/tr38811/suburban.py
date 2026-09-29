@@ -241,3 +241,48 @@ def sample_suburban_los_sband_ul_correlated_lsp(
         zsa_deg=torch.pow(10.0, native[..., 5]),
         zsd_deg=torch.pow(10.0, native[..., 6]),
     )
+
+
+_SUBURBAN_LOS_S_UL_30_CORR_DISTANCE_M = (30.0, 18.0, 15.0, 37.0, 12.0, 15.0, 15.0)
+
+
+def suburban_los_sband_ul_spatial_correlation_matrices(
+    ut_xy_m,
+    elevation_deg: float = 30.0,
+    *,
+    dtype=None,
+    device=None,
+):
+    """Return one spatial-correlation matrix per UL LSP.
+
+    Output order is DS, ASD, ASA, SF, K, ZSA, ZSD and output shape is
+    [7, num_ut, num_ut]. Uses C_ij = exp(-d_ij / D_X).
+    """
+    import torch
+    from sionna.phy.channel.tr38901.spatial_consistency import (
+        spatial_consistency_correlation_matrix,
+    )
+
+    if abs(float(elevation_deg) - 30.0) > 1e-12:
+        raise NotImplementedError(
+            "spatial UL checkpoint currently supports 30 degree elevation"
+        )
+    dtype = dtype or torch.float64
+    xy = torch.as_tensor(ut_xy_m, dtype=dtype, device=device)
+    if xy.ndim != 2 or xy.shape[-1] != 2:
+        raise ValueError("ut_xy_m must have shape [num_ut, 2]")
+    delta = xy[:, None, :] - xy[None, :, :]
+    distance = torch.linalg.vector_norm(delta, dim=-1)
+
+    precision = "double" if dtype == torch.float64 else "single"
+    out = []
+    for d_corr in _SUBURBAN_LOS_S_UL_30_CORR_DISTANCE_M:
+        out.append(
+            spatial_consistency_correlation_matrix(
+                distance,
+                d_corr,
+                precision=precision,
+                device=xy.device,
+            )
+        )
+    return torch.stack(out, dim=0)
